@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { Amplify } from 'aws-amplify';
+import { Authenticator } from '@aws-amplify/ui-react';
 
 const amplifyConfig = {
   Auth: {
@@ -34,6 +35,6 @@ export default function AmplifyProvider({ children }) {
     Amplify.configure(amplifyConfig);
   }, []);
 
-  return <>{children}</>;
+  return <Authenticator.Provider>{children}</Authenticator.Provider>;
 }
 

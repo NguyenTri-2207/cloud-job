@@ -1,7 +1,6 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import AmplifyProvider from "@/components/AmplifyProvider";
-import { Authenticator } from "@aws-amplify/ui-react";
 import "@aws-amplify/ui-react/styles.css";
 
 const geistSans = Geist({
@@ -25,9 +24,7 @@ export default function RootLayout({ children }) {
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <AmplifyProvider>
-          <Authenticator.Provider>{children}</Authenticator.Provider>
-        </AmplifyProvider>
+        <AmplifyProvider>{children}</AmplifyProvider>
       </body>
     </html>
   );
