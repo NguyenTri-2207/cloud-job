@@ -5,6 +5,17 @@ import "@aws-amplify/ui-react/styles.css";
 import { useAuthenticator } from "@aws-amplify/ui-react";
 import Link from "next/link";
 
+const formFields = {
+  signUp: {
+    "name.formatted": {
+      label: "Full Name",
+      placeholder: "Enter your full name",
+      required: true,
+      order: 1,
+    },
+  },
+};
+
 function AdminContent() {
   const { user, signOut } = useAuthenticator();
 
@@ -74,9 +85,8 @@ function AdminContent() {
 
 export default function AdminPage() {
   return (
-    <Authenticator socialProviders={["google"]}>
+    <Authenticator formFields={formFields}>
       <AdminContent />
     </Authenticator>
   );
 }
-
