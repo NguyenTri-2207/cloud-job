@@ -33,13 +33,32 @@ export const handler = async (event) => {
 
     switch (method) {
       case "GET":
-        // Nếu có path parameter (job ID), lấy chi tiết job
-        const jobId = event.pathParameters?.id || event.pathParameters?.jobId;
+        // Nếu có query parameter id hoặc _id, lấy chi tiết job
+        // Frontend dùng id, nên ưu tiên id trước
+        let jobId =
+          event.queryStringParameters?.id ||
+          event.queryStringParameters?._id ||
+          event.pathParameters?.id ||
+          event.pathParameters?.jobId;
+
+        // Remove quotes nếu có (trường hợp ?_id="value")
+        if (jobId) {
+          jobId = jobId
+            .toString()
+            .replace(/^["']|["']$/g, "")
+            .trim();
+        }
 
         if (jobId) {
-          // GET /jobs/:id - Lấy chi tiết job
+          // GET /jobs?_id=... - Lấy chi tiết job
+          console.log("Getting job with ID:", jobId);
+          console.log("Query params:", event.queryStringParameters);
+
           const keyParams = {};
           keyParams[PARTITION_KEY] = jobId;
+
+          console.log("DynamoDB Key:", JSON.stringify(keyParams));
+          console.log("Partition Key name:", PARTITION_KEY);
 
           const getCmd = new GetCommand({
             TableName: TABLE_NAME,
@@ -48,9 +67,35 @@ export const handler = async (event) => {
 
           const item = await docClient.send(getCmd);
 
+          console.log("DynamoDB result:", item.Item ? "Found" : "Not found");
+
           if (!item.Item) {
+            // Debug: Scan table để xem items có gì
+            console.log("Item not found, scanning table for debugging...");
+            const scanCmd = new ScanCommand({ TableName: TABLE_NAME });
+            const scanResult = await docClient.send(scanCmd);
+            console.log("Total items in table:", scanResult.Items?.length || 0);
+
+            // Log một vài items đầu tiên để xem structure
+            if (scanResult.Items && scanResult.Items.length > 0) {
+              console.log("Sample items (first 3):");
+              scanResult.Items.slice(0, 3).forEach((item, index) => {
+                console.log(`Item ${index + 1}:`, {
+                  partitionKey: item[PARTITION_KEY],
+                  _id: item._id,
+                  id: item.id,
+                  title: item.title,
+                });
+              });
+            }
+
             statusCode = 404;
-            body = { error: "Job không tồn tại" };
+            body = {
+              error: "Job không tồn tại",
+              searchedId: jobId,
+              partitionKey: PARTITION_KEY,
+              totalItemsInTable: scanResult.Items?.length || 0,
+            };
           } else {
             body = item.Item;
           }
@@ -59,9 +104,10 @@ export const handler = async (event) => {
           const scanCmd = new ScanCommand({ TableName: TABLE_NAME });
           const data = await docClient.send(scanCmd);
 
-          // Filter out các item không phải job (có title hoặc _id)
+          // Filter out các item không phải job (có title hoặc id)
+          // Frontend dùng id, nên ưu tiên check id trước
           const jobs = (data.Items || []).filter(
-            (item) => item.title || item._id || item.id
+            (item) => item.title || item.id || item._id
           );
 
           body = jobs;
@@ -74,21 +120,39 @@ export const handler = async (event) => {
         let requestJSON =
           typeof event.body === "string" ? JSON.parse(event.body) : event.body;
 
-        // Nếu client gửi lên {_id: "1", title: "..."} thì code sẽ tạo thêm cột "Ngoctri22071@": "1"
+        // Frontend dùng id, nên ưu tiên id trước _id
+        // Nếu client gửi lên {id: "1", title: "..."} thì code sẽ tạo thêm cột "Ngoctri22071@": "1"
         const idValue = requestJSON.id || requestJSON._id;
 
         if (!idValue) {
           throw new Error(`Dữ liệu thiếu ID (cần trường 'id' hoặc '_id')`);
         }
 
-        // Gán giá trị vào đúng tên Partition Key lạ của bạn
-        requestJSON[PARTITION_KEY] = idValue;
+        // Normalize ID
+        const normalizedId = String(idValue).trim();
+
+        // Gán giá trị vào đúng tên Partition Key - partition key = id
+        requestJSON[PARTITION_KEY] = normalizedId;
+
+        // Đảm bảo cả id và _id đều có cùng giá trị (normalized)
+        requestJSON.id = normalizedId;
+        requestJSON._id = normalizedId;
+
+        console.log("Creating job with ID:", idValue);
+        console.log("Item to save:", JSON.stringify(requestJSON));
 
         await docClient.send(
           new PutCommand({
             TableName: TABLE_NAME,
             Item: requestJSON,
           })
+        );
+
+        console.log(
+          "Job created successfully with partition key:",
+          PARTITION_KEY,
+          "=",
+          idValue
         );
 
         body = { message: "Success", item: requestJSON };
@@ -101,8 +165,11 @@ export const handler = async (event) => {
         let updateJSON =
           typeof event.body === "string" ? JSON.parse(event.body) : event.body;
 
-        // Lấy ID từ path parameter hoặc body
+        // Lấy ID từ query parameter id hoặc path parameter
+        // Frontend dùng id, nên ưu tiên id trước
         const updateId =
+          event.queryStringParameters?.id ||
+          event.queryStringParameters?._id ||
           event.pathParameters?.id ||
           event.pathParameters?.jobId ||
           updateJSON.id ||
@@ -160,11 +227,31 @@ export const handler = async (event) => {
         break;
 
       case "DELETE":
-        // Lấy ID từ path parameter hoặc query string
-        const deleteId =
+        // Lấy ID từ query parameter id hoặc path parameter
+        // Frontend dùng id, nên ưu tiên id trước
+        let deleteId =
+          event.queryStringParameters?.id ||
+          event.queryStringParameters?._id ||
           event.pathParameters?.id ||
-          event.pathParameters?.jobId ||
-          event.queryStringParameters?.id;
+          event.pathParameters?.jobId;
+
+        console.log("DELETE - Raw deleteId from event:", deleteId);
+        console.log(
+          "DELETE - queryStringParameters:",
+          JSON.stringify(event.queryStringParameters)
+        );
+        console.log(
+          "DELETE - pathParameters:",
+          JSON.stringify(event.pathParameters)
+        );
+
+        // Remove quotes và normalize
+        if (deleteId) {
+          deleteId = String(deleteId)
+            .replace(/^["']|["']$/g, "")
+            .trim();
+          console.log("DELETE - Normalized deleteId:", deleteId);
+        }
 
         if (!deleteId) {
           throw new Error(
@@ -173,8 +260,14 @@ export const handler = async (event) => {
         }
 
         // Tạo key xóa đúng với tên cột đặc biệt của bạn
+        // CHỈ dùng id làm partition key, KHÔNG dùng title
         const deleteKeyParams = {};
         deleteKeyParams[PARTITION_KEY] = deleteId;
+
+        console.log(
+          "DELETE - DeleteCommand Key:",
+          JSON.stringify(deleteKeyParams)
+        );
 
         await docClient.send(
           new DeleteCommand({

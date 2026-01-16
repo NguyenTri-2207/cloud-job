@@ -169,49 +169,53 @@ export default function JobsListPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {jobs.map((job) => (
-                  <div
-                    key={job._id || job.id}
-                    onClick={() => handleJobClick(job._id || job.id)}
-                    className="cursor-pointer rounded-lg border border-zinc-200 bg-white p-6 transition-all hover:border-zinc-300 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-                          {job.title || "Chưa có tiêu đề"}
-                        </h3>
-                        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                          {job.company || "Công ty chưa được cập nhật"}
-                        </p>
-                        {job.location && (
-                          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-500">
-                            📍 {job.location}
+                {jobs.map((job) => {
+                  // Frontend dùng id thay vì _id (partition key = id)
+                  const jobId = job.id || job._id;
+                  return (
+                    <div
+                      key={jobId}
+                      onClick={() => handleJobClick(jobId)}
+                      className="cursor-pointer rounded-lg border border-zinc-200 bg-white p-6 transition-all hover:border-zinc-300 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h3 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+                            {job.title || "Chưa có tiêu đề"}
+                          </h3>
+                          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                            {job.company || "Công ty chưa được cập nhật"}
                           </p>
+                          {job.location && (
+                            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-500">
+                              📍 {job.location}
+                            </p>
+                          )}
+                        </div>
+                        {job.salary && (
+                          <div className="ml-4 text-right">
+                            <p className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+                              {job.salary}
+                            </p>
+                          </div>
                         )}
                       </div>
-                      {job.salary && (
-                        <div className="ml-4 text-right">
-                          <p className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-                            {job.salary}
-                          </p>
-                        </div>
-                      )}
-                    </div>
 
-                    {job.description && (
-                      <p className="mt-3 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">
-                        {job.description}
-                      </p>
-                    )}
-
-                    <div className="mt-4 flex items-center gap-4 text-xs text-zinc-500 dark:text-zinc-500">
-                      {job.createdAt && (
-                        <span>Đăng ngày: {formatDate(job.createdAt)}</span>
+                      {job.description && (
+                        <p className="mt-3 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">
+                          {job.description}
+                        </p>
                       )}
-                      {job.type && <span>• {job.type}</span>}
+
+                      <div className="mt-4 flex items-center gap-4 text-xs text-zinc-500 dark:text-zinc-500">
+                        {job.createdAt && (
+                          <span>Đăng ngày: {formatDate(job.createdAt)}</span>
+                        )}
+                        {job.type && <span>• {job.type}</span>}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
