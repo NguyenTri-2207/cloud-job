@@ -2,18 +2,21 @@
 
 import { useState } from "react";
 import { useAuthenticator } from "@aws-amplify/ui-react";
-import { fetchAuthSession } from "aws-amplify/auth";
-import { getPresignedUrl, uploadFileToS3, validateFile } from "../services/s3Service";
+import { uploadFileToS3Amplify, validateFile } from "../services/s3Service";
 
 /**
  * Component form upload CV
- * 
+ *
  * Props:
  * - onUploadSuccess: (fileKey: string) => void - Callback khi upload thành công
  * - onUploadError: (error: string) => void - Callback khi upload thất bại
  * - jobId?: string - ID của job đang apply (optional)
  */
-export default function CVUploadForm({ onUploadSuccess, onUploadError, jobId }) {
+export default function CVUploadForm({
+  onUploadSuccess,
+  onUploadError,
+  jobId,
+}) {
   const { user } = useAuthenticator();
   const [file, setFile] = useState(null);
   const [fileName, setFileName] = useState("");
@@ -23,7 +26,7 @@ export default function CVUploadForm({ onUploadSuccess, onUploadError, jobId }) 
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
-    
+
     // Reset state
     setError("");
     setUploadProgress(0);
@@ -44,10 +47,14 @@ export default function CVUploadForm({ onUploadSuccess, onUploadError, jobId }) 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    console.log(file);
+
     if (!file) {
       setError("Vui lòng chọn file CV");
       return;
     }
+
+    console.log(user);
 
     if (!user) {
       setError("Bạn cần đăng nhập để upload CV");
@@ -59,49 +66,43 @@ export default function CVUploadForm({ onUploadSuccess, onUploadError, jobId }) 
     setUploadProgress(0);
 
     try {
-      // 1. Lấy auth token từ Cognito
-      const session = await fetchAuthSession();
-      const idToken = session.tokens?.idToken?.toString();
-      
-      if (!idToken) {
-        throw new Error("Không thể lấy authentication token. Vui lòng đăng nhập lại.");
-      }
+      // Generate file key với format: cvs/{userId}/{jobId}/{timestamp}_{filename}
+      // user object từ Amplify có thể có username hoặc userId
+      const userId = user?.username || user?.userId || "anonymous";
+      const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const fileKey = jobId
+        ? `cvs/${userId}/${jobId}/${Date.now()}_${sanitizedFileName}`
+        : `cvs/${userId}/${Date.now()}_${sanitizedFileName}`;
 
-      setUploadProgress(20);
-
-      // 2. Lấy pre-signed URL từ API Gateway
-      const { uploadUrl, fileKey } = await getPresignedUrl(
-        file.name,
-        file.type,
-        idToken
+      // Upload file lên S3 sử dụng Amplify Storage API
+      const uploadResult = await uploadFileToS3Amplify(
+        file,
+        fileKey,
+        (progress) => {
+          // Update progress
+          setUploadProgress(progress.percent || 0);
+        }
       );
 
-      setUploadProgress(40);
-
-      // 3. Upload file lên S3
-      const uploadResult = await uploadFileToS3(file, uploadUrl);
-
-      setUploadProgress(100);
-
-      // 4. Callback success
+      // Callback success
       if (onUploadSuccess) {
-        onUploadSuccess(uploadResult.fileKey || fileKey);
+        onUploadSuccess(uploadResult.fileKey);
       }
 
       // Reset form
       setFile(null);
       setFileName("");
-      
+
       // Reset file input
       const fileInput = document.getElementById("cv-file-input");
       if (fileInput) {
         fileInput.value = "";
       }
-
     } catch (err) {
-      const errorMessage = err.message || "Có lỗi xảy ra khi upload file. Vui lòng thử lại.";
+      const errorMessage =
+        err.message || "Có lỗi xảy ra khi upload file. Vui lòng thử lại.";
       setError(errorMessage);
-      
+
       if (onUploadError) {
         onUploadError(errorMessage);
       }
@@ -177,4 +178,3 @@ export default function CVUploadForm({ onUploadSuccess, onUploadError, jobId }) 
     </form>
   );
 }
-

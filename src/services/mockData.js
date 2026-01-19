@@ -5,7 +5,7 @@
 
 export const mockJobs = [
   {
-    _id: "1",
+    id: "1",
     title: "Senior Full Stack Developer",
     company: "TechCorp Vietnam",
     location: "Ho Chi Minh City",
@@ -18,7 +18,7 @@ export const mockJobs = [
     createdAt: "2024-01-15T10:00:00Z",
   },
   {
-    _id: "2",
+    id: "2",
     title: "AWS Solutions Architect",
     company: "Cloud Solutions Inc",
     location: "Ha Noi",
@@ -31,7 +31,7 @@ export const mockJobs = [
     createdAt: "2024-01-14T14:30:00Z",
   },
   {
-    _id: "3",
+    id: "3",
     title: "DevOps Engineer",
     company: "StartupXYZ",
     location: "Da Nang",
@@ -44,7 +44,7 @@ export const mockJobs = [
     createdAt: "2024-01-13T09:15:00Z",
   },
   {
-    _id: "4",
+    id: "4",
     title: "Frontend Developer (React)",
     company: "Digital Agency Pro",
     location: "Ho Chi Minh City",
@@ -57,7 +57,7 @@ export const mockJobs = [
     createdAt: "2024-01-12T16:45:00Z",
   },
   {
-    _id: "5",
+    id: "5",
     title: "Backend Developer (Node.js)",
     company: "E-commerce Platform",
     location: "Ho Chi Minh City",
@@ -70,7 +70,7 @@ export const mockJobs = [
     createdAt: "2024-01-11T11:20:00Z",
   },
   {
-    _id: "6",
+    id: "6",
     title: "Cloud Security Engineer",
     company: "Financial Services Co",
     location: "Ha Noi",
@@ -83,7 +83,7 @@ export const mockJobs = [
     createdAt: "2024-01-10T08:00:00Z",
   },
   {
-    _id: "7",
+    id: "7",
     title: "Full Stack Developer (Remote)",
     company: "Global Tech Company",
     location: "Remote",
@@ -96,7 +96,7 @@ export const mockJobs = [
     createdAt: "2024-01-09T13:30:00Z",
   },
   {
-    _id: "8",
+    id: "8",
     title: "Junior Software Engineer",
     company: "Tech Startup",
     location: "Ho Chi Minh City",
@@ -109,7 +109,7 @@ export const mockJobs = [
     createdAt: "2024-01-08T10:15:00Z",
   },
   {
-    _id: "9",
+    id: "9",
     title: "Data Engineer",
     company: "Big Data Analytics",
     location: "Ha Noi",
@@ -122,7 +122,7 @@ export const mockJobs = [
     createdAt: "2024-01-07T15:00:00Z",
   },
   {
-    _id: "10",
+    id: "10",
     title: "Mobile Developer (React Native)",
     company: "Mobile App Studio",
     location: "Ho Chi Minh City",
@@ -167,7 +167,7 @@ export async function mockGetJobsList(page = 1, limit = 10) {
 export async function mockGetJobDetail(jobId) {
   await delay(200);
 
-  const job = mockJobs.find((j) => j._id === jobId || j.id === jobId);
+  const job = mockJobs.find((j) => j.id === jobId);
 
   if (!job) {
     throw new Error("Job không tồn tại");
@@ -182,7 +182,7 @@ export async function mockGetJobDetail(jobId) {
 export async function mockSubmitApplication(jobId, cvFileKey) {
   await delay(500);
 
-  const job = mockJobs.find((j) => j._id === jobId || j.id === jobId);
+  const job = mockJobs.find((j) => j.id === jobId);
 
   if (!job) {
     throw new Error("Job không tồn tại");

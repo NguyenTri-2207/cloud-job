@@ -1,11 +1,11 @@
 /**
- * Service để xử lý upload file lên S3 thông qua Pre-signed URL
+ * Service để xử lý upload file lên S3
  *
- * Flow:
- * 1. Frontend gọi API Gateway để lấy pre-signed URL
- * 2. Frontend upload file trực tiếp lên S3 bằng pre-signed URL
- * 3. Trả về S3 key/URL để lưu vào database
+ * Có 2 cách:
+ * 1. Pre-signed URL (cũ): Frontend gọi API Gateway → lấy pre-signed URL → upload
+ * 2. Amplify Storage API (mới): Dùng Amplify Storage trực tiếp
  */
+import { uploadData } from "aws-amplify/storage";
 
 /**
  * Lấy pre-signed URL từ API Gateway
@@ -129,4 +129,68 @@ export function validateFile(file, options = {}) {
   }
 
   return { valid: true };
+}
+
+/**
+ * Upload file lên S3 sử dụng Amplify Storage API (v6)
+ *
+ * @param {File} file - File object từ input
+ * @param {string} fileKey - S3 key (path) để lưu file (e.g., "cvs/user123/job456/cv.pdf")
+ * @param {Function} onProgress - Callback để track progress: (progress) => void
+ * @returns {Promise<{success: boolean, fileKey: string, path: string}>}
+ */
+export async function uploadFileToS3Amplify(file, fileKey, onProgress = null) {
+  try {
+    // Validate file trước
+    const validation = validateFile(file);
+    if (!validation.valid) {
+      throw new Error(validation.error);
+    }
+
+    // Generate file key nếu chưa có
+    // Format: cvs/{timestamp}_{random}_{filename}
+    const finalFileKey =
+      fileKey ||
+      `cvs/${Date.now()}_${Math.random().toString(36).substring(2, 9)}_${
+        file.name
+      }`;
+
+    console.log("📤 Uploading file to S3 via Amplify Storage:", finalFileKey);
+
+    // Upload using Amplify Storage API
+    const result = await uploadData({
+      key: finalFileKey,
+      data: file,
+      options: {
+        contentType: file.type,
+        onProgress: (progress) => {
+          if (onProgress) {
+            const percent = progress.transferredBytes
+              ? Math.round(
+                  (progress.transferredBytes / progress.totalBytes) * 100
+                )
+              : 0;
+            onProgress({
+              transferredBytes: progress.transferredBytes,
+              totalBytes: progress.totalBytes,
+              percent,
+            });
+          }
+        },
+      },
+    }).result;
+
+    console.log("✅ Upload successful:", result);
+
+    return {
+      success: true,
+      fileKey: finalFileKey,
+      path: result.path || finalFileKey,
+    };
+  } catch (error) {
+    console.error("❌ Error uploading file to S3 via Amplify:", error);
+    throw new Error(
+      error.message || "Có lỗi xảy ra khi upload file. Vui lòng thử lại."
+    );
+  }
 }

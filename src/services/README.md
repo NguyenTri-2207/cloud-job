@@ -52,7 +52,7 @@ Backend có thể tham khảo format trong `mockData.js`:
 ### GET /jobs/:id
 ```json
 {
-  "_id": "1",
+  "id": "1",
   "title": "...",
   "company": "...",
   "location": "...",

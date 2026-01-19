@@ -24,24 +24,31 @@ export const handler = async (event) => {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers":
-      "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+      "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept",
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Max-Age": "86400", // Cache preflight for 24 hours
   };
 
   try {
     const method = event.httpMethod || event.requestContext?.http?.method;
 
+    // Handle CORS preflight (OPTIONS request)
+    if (method === "OPTIONS") {
+      return {
+        statusCode: 200,
+        body: "",
+        headers,
+      };
+    }
+
     switch (method) {
       case "GET":
-        // Nếu có query parameter id hoặc _id, lấy chi tiết job
-        // Frontend dùng id, nên ưu tiên id trước
+        // Lấy ID từ query parameter id hoặc path parameter
         let jobId =
           event.queryStringParameters?.id ||
-          event.queryStringParameters?._id ||
           event.pathParameters?.id ||
           event.pathParameters?.jobId;
 
-        // Remove quotes nếu có (trường hợp ?_id="value")
         if (jobId) {
           jobId = jobId
             .toString()
@@ -50,7 +57,6 @@ export const handler = async (event) => {
         }
 
         if (jobId) {
-          // GET /jobs?_id=... - Lấy chi tiết job
           console.log("Getting job with ID:", jobId);
           console.log("Query params:", event.queryStringParameters);
 
@@ -82,7 +88,6 @@ export const handler = async (event) => {
               scanResult.Items.slice(0, 3).forEach((item, index) => {
                 console.log(`Item ${index + 1}:`, {
                   partitionKey: item[PARTITION_KEY],
-                  _id: item._id,
                   id: item.id,
                   title: item.title,
                 });
@@ -105,9 +110,8 @@ export const handler = async (event) => {
           const data = await docClient.send(scanCmd);
 
           // Filter out các item không phải job (có title hoặc id)
-          // Frontend dùng id, nên ưu tiên check id trước
           const jobs = (data.Items || []).filter(
-            (item) => item.title || item.id || item._id
+            (item) => item.title || item.id
           );
 
           body = jobs;
@@ -120,12 +124,11 @@ export const handler = async (event) => {
         let requestJSON =
           typeof event.body === "string" ? JSON.parse(event.body) : event.body;
 
-        // Frontend dùng id, nên ưu tiên id trước _id
         // Nếu client gửi lên {id: "1", title: "..."} thì code sẽ tạo thêm cột "Ngoctri22071@": "1"
-        const idValue = requestJSON.id || requestJSON._id;
+        const idValue = requestJSON.id;
 
         if (!idValue) {
-          throw new Error(`Dữ liệu thiếu ID (cần trường 'id' hoặc '_id')`);
+          throw new Error(`Dữ liệu thiếu ID (cần trường 'id')`);
         }
 
         // Normalize ID
@@ -134,9 +137,7 @@ export const handler = async (event) => {
         // Gán giá trị vào đúng tên Partition Key - partition key = id
         requestJSON[PARTITION_KEY] = normalizedId;
 
-        // Đảm bảo cả id và _id đều có cùng giá trị (normalized)
         requestJSON.id = normalizedId;
-        requestJSON._id = normalizedId;
 
         console.log("Creating job with ID:", idValue);
         console.log("Item to save:", JSON.stringify(requestJSON));
@@ -166,18 +167,15 @@ export const handler = async (event) => {
           typeof event.body === "string" ? JSON.parse(event.body) : event.body;
 
         // Lấy ID từ query parameter id hoặc path parameter
-        // Frontend dùng id, nên ưu tiên id trước
         const updateId =
           event.queryStringParameters?.id ||
-          event.queryStringParameters?._id ||
           event.pathParameters?.id ||
           event.pathParameters?.jobId ||
-          updateJSON.id ||
-          updateJSON._id;
+          updateJSON.id;
 
         if (!updateId) {
           throw new Error(
-            `Dữ liệu thiếu ID (cần trường 'id' hoặc '_id' hoặc path parameter)`
+            `Dữ liệu thiếu ID (cần query parameter ?id=... hoặc path parameter)`
           );
         }
 
@@ -190,9 +188,9 @@ export const handler = async (event) => {
         const expressionAttributeNames = {};
         const expressionAttributeValues = {};
 
-        // Update các field (trừ PARTITION_KEY và id/_id)
+        // Update các field (trừ PARTITION_KEY và id)
         Object.keys(updateJSON).forEach((key, index) => {
-          if (key !== PARTITION_KEY && key !== "id" && key !== "_id") {
+          if (key !== PARTITION_KEY && key !== "id") {
             const attrName = `#attr${index}`;
             const attrValue = `:val${index}`;
             updateExpressions.push(`${attrName} = ${attrValue}`);
@@ -228,10 +226,8 @@ export const handler = async (event) => {
 
       case "DELETE":
         // Lấy ID từ query parameter id hoặc path parameter
-        // Frontend dùng id, nên ưu tiên id trước
         let deleteId =
           event.queryStringParameters?.id ||
-          event.queryStringParameters?._id ||
           event.pathParameters?.id ||
           event.pathParameters?.jobId;
 

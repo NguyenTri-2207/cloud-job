@@ -42,7 +42,9 @@ export default function JobsListAdmin({ onRefresh }) {
         authToken,
       });
 
-      setJobs(data.jobs || []);
+      // Filter out jobs không có id (đảm bảo chỉ render jobs hợp lệ)
+      const validJobs = (data.jobs || []).filter((job) => job.id);
+      setJobs(validJobs);
     } catch (err) {
       setError(err.message || "Có lỗi xảy ra khi tải danh sách jobs");
       console.error("Error loading jobs:", err);
@@ -143,17 +145,16 @@ export default function JobsListAdmin({ onRefresh }) {
     );
   }
 
+  // Filter out jobs không có id trước khi render
+  const validJobs = jobs.filter((job) => job.id);
+
   return (
     <div className="space-y-4">
-      {jobs.map((job) => {
-        // Frontend dùng id thay vì _id (partition key = id)
-        // Ưu tiên job.id, chỉ fallback sang _id nếu không có id
-        const jobId = job.id || job._id;
-        if (!jobId) {
-          console.warn("Job missing ID:", job);
-        }
+      {validJobs.map((job) => {
+        // CHỈ dùng id (partition key = id)
+        const jobId = job.id;
         const isEditing =
-          editingJob && (editingJob.id === jobId || editingJob._id === jobId);
+          editingJob && editingJob.id === jobId;
         const isDeleting = deletingJobId === jobId;
 
         return (

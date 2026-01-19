@@ -170,8 +170,7 @@ export default function JobsListPage() {
             ) : (
               <div className="space-y-4">
                 {jobs.map((job) => {
-                  // Frontend dùng id thay vì _id (partition key = id)
-                  const jobId = job.id || job._id;
+                  const jobId = job.id;
                   return (
                     <div
                       key={jobId}

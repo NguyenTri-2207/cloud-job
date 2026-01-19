@@ -7,7 +7,7 @@ import { updateJob } from "../services/jobService";
 
 /**
  * Component form edit job
- * 
+ *
  * Props:
  * - job: Object - Job data để edit
  * - onSuccess: () => void - Callback khi update thành công
@@ -58,8 +58,7 @@ export default function EditJobForm({ job, onSuccess, onError, onCancel }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Frontend dùng id thay vì _id (partition key = id)
-    const jobId = job?.id || job?._id;
+    const jobId = job?.id;
     if (!job || !jobId) {
       setError("Job ID không hợp lệ");
       return;
@@ -88,10 +87,11 @@ export default function EditJobForm({ job, onSuccess, onError, onCancel }) {
       const idToken = session.tokens?.idToken?.toString();
 
       if (!idToken) {
-        throw new Error("Không thể lấy authentication token. Vui lòng đăng nhập lại.");
+        throw new Error(
+          "Không thể lấy authentication token. Vui lòng đăng nhập lại."
+        );
       }
 
-      // Format job data để update (không gửi id/_id trong body, chỉ trong URL)
       const jobData = {
         title: formData.title.trim(),
         company: formData.company.trim(),
@@ -102,8 +102,6 @@ export default function EditJobForm({ job, onSuccess, onError, onCancel }) {
         requirements: formData.requirements.trim() || "Đang cập nhật",
       };
 
-      // Frontend dùng id thay vì _id
-      // Gọi API
       const result = await updateJob(jobId, jobData, idToken);
 
       // Callback success
@@ -111,7 +109,8 @@ export default function EditJobForm({ job, onSuccess, onError, onCancel }) {
         onSuccess(result);
       }
     } catch (err) {
-      const errorMessage = err.message || "Có lỗi xảy ra khi cập nhật job. Vui lòng thử lại.";
+      const errorMessage =
+        err.message || "Có lỗi xảy ra khi cập nhật job. Vui lòng thử lại.";
       setError(errorMessage);
       if (onError) {
         onError(errorMessage);
@@ -296,4 +295,3 @@ export default function EditJobForm({ job, onSuccess, onError, onCancel }) {
     </form>
   );
 }
-

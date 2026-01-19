@@ -134,8 +134,8 @@ export async function getJobsList(options = {}) {
     // Nếu là array trực tiếp
     if (Array.isArray(data)) {
       // Filter out các object không phải job (như metadata)
-      // Frontend dùng id, nên ưu tiên check id trước
-      const jobs = data.filter((item) => item.title || item.id || item._id);
+      // CHỈ lấy items có id (bắt buộc) và có title (để đảm bảo là job)
+      const jobs = data.filter((item) => item.id && item.title);
       return {
         jobs,
         total: jobs.length,
@@ -148,18 +148,24 @@ export async function getJobsList(options = {}) {
     if (data.data) {
       const jobsData = data.data;
       if (Array.isArray(jobsData)) {
+        // Filter chỉ lấy jobs có id
+        const filteredJobs = jobsData.filter((item) => item.id && item.title);
         return {
-          jobs: jobsData,
-          total: jobsData.length,
+          jobs: filteredJobs,
+          total: filteredJobs.length,
           page: data.page || page,
           limit: data.limit || limit,
         };
       }
       // Nếu data.data có jobs array
       if (jobsData.jobs && Array.isArray(jobsData.jobs)) {
+        // Filter chỉ lấy jobs có id
+        const filteredJobs = jobsData.jobs.filter(
+          (item) => item.id && item.title
+        );
         return {
-          jobs: jobsData.jobs,
-          total: jobsData.total || jobsData.jobs.length,
+          jobs: filteredJobs,
+          total: filteredJobs.length,
           page: jobsData.page || page,
           limit: jobsData.limit || limit,
         };
@@ -168,9 +174,11 @@ export async function getJobsList(options = {}) {
 
     // Nếu có jobs array trực tiếp
     if (data.jobs && Array.isArray(data.jobs)) {
+      // Filter chỉ lấy jobs có id
+      const filteredJobs = data.jobs.filter((item) => item.id && item.title);
       return {
-        jobs: data.jobs,
-        total: data.total || data.jobs.length,
+        jobs: filteredJobs,
+        total: filteredJobs.length,
         page: data.page || page,
         limit: data.limit || limit,
       };
@@ -229,7 +237,7 @@ export async function getJobDetail(jobId, authToken = null) {
     }
 
     // API endpoint: https://core-jobs.theblogreviews.com/jobs?id=...
-    // Frontend dùng id thay vì _id để query (partition key = id)
+    // CHỈ dùng id để query (partition key = id)
     const baseUrl = normalizeEndpoint(apiEndpoint);
     const jobDetailEndpoint = `${baseUrl}/jobs?id=${encodeURIComponent(jobId)}`;
 
@@ -368,7 +376,7 @@ export async function createJob(jobData, authToken) {
       success: true,
       job: {
         ...jobData,
-        _id: `mock_${Date.now()}`,
+        id: `mock_${Date.now()}`,
         createdAt: new Date().toISOString(),
       },
     };
@@ -381,17 +389,15 @@ export async function createJob(jobData, authToken) {
     const baseUrl = normalizeEndpoint(apiEndpoint);
     const createJobEndpoint = `${baseUrl}/jobs`;
 
-    // Backend yêu cầu có 'id' hoặc '_id' trong request body
-    // Frontend dùng id (partition key = id), nên ưu tiên id
+    // Backend yêu cầu có 'id' trong request body
+    // CHỈ dùng id (partition key = id)
     // Generate ID nếu chưa có
-    const generatedId = jobData.id || jobData._id || generateJobId();
+    const generatedId = jobData.id || generateJobId();
 
     const jobDataWithId = {
       ...jobData,
-      // Ưu tiên id (partition key = id) - frontend dùng id để query
+      // CHỈ set id (partition key = id)
       id: generatedId,
-      // Đảm bảo cả _id và id giống nhau để tránh conflict
-      _id: generatedId,
     };
 
     const response = await fetch(createJobEndpoint, {
@@ -433,7 +439,7 @@ export async function createJob(jobData, authToken) {
         success: true,
         job: {
           ...jobData,
-          _id: `mock_${Date.now()}`,
+          id: `mock_${Date.now()}`,
           createdAt: new Date().toISOString(),
         },
       };
@@ -466,7 +472,6 @@ export async function updateJob(jobId, jobData, authToken) {
       success: true,
       job: {
         ...jobData,
-        _id: jobId,
         id: jobId,
       },
     };
@@ -520,7 +525,6 @@ export async function updateJob(jobId, jobData, authToken) {
         success: true,
         job: {
           ...jobData,
-          _id: jobId,
           id: jobId,
         },
       };
