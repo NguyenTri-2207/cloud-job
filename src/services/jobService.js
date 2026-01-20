@@ -5,27 +5,7 @@
  * - GET /jobs - Lấy danh sách jobs
  * - GET /jobs/:id - Lấy chi tiết job
  *
- * Tự động fallback sang mock data nếu không có API endpoint
  */
-
-import {
-  mockGetJobsList,
-  mockGetJobDetail,
-  mockSubmitApplication,
-} from "./mockData";
-
-/**
- * Kiểm tra xem có nên dùng mock data không
- */
-function shouldUseMockData() {
-  const apiEndpoint = process.env.NEXT_PUBLIC_API_GATEWAY_URL;
-  const useMock = process.env.NEXT_PUBLIC_USE_MOCK_DATA === "true";
-
-  // Dùng mock nếu:
-  // 1. Có flag USE_MOCK_DATA = true
-  // 2. Hoặc không có API endpoint
-  return useMock || !apiEndpoint;
-}
 
 /**
  * Normalize API endpoint (remove trailing slash)
@@ -38,40 +18,6 @@ function normalizeEndpoint(endpoint) {
 }
 
 /**
- * Kiểm tra xem error có phải là network error không
- * (Failed to fetch, CORS, timeout, etc.)
- */
-function isNetworkError(error) {
-  if (!error) return false;
-
-  const errorMessage = error.message?.toLowerCase() || "";
-  const errorName = error.name?.toLowerCase() || "";
-
-  // Các loại network errors
-  const networkErrorPatterns = [
-    "failed to fetch",
-    "networkerror",
-    "network error",
-    "network request failed",
-    "fetch failed",
-    "cors",
-    "timeout",
-    "connection",
-    "econnrefused",
-    "enotfound",
-    "eai_again",
-  ];
-
-  return (
-    networkErrorPatterns.some(
-      (pattern) => errorMessage.includes(pattern) || errorName.includes(pattern)
-    ) ||
-    error instanceof TypeError ||
-    error instanceof DOMException
-  );
-}
-
-/**
  * Lấy danh sách jobs
  * @param {Object} options - Query options
  * @param {number} options.page - Page number (default: 1)
@@ -81,12 +27,6 @@ function isNetworkError(error) {
  */
 export async function getJobsList(options = {}) {
   const { page = 1, limit = 10, authToken = null } = options;
-
-  // Nếu không có API endpoint, dùng mock data
-  if (shouldUseMockData()) {
-    console.log("📦 Using mock data for jobs list");
-    return await mockGetJobsList(page, limit);
-  }
 
   const apiEndpoint = process.env.NEXT_PUBLIC_API_GATEWAY_URL;
 
@@ -194,15 +134,6 @@ export async function getJobsList(options = {}) {
   } catch (error) {
     console.error("Error fetching jobs list:", error);
 
-    // Tự động fallback sang mock data nếu là network error
-    if (isNetworkError(error)) {
-      console.warn(
-        "⚠️ Network error detected, falling back to mock data:",
-        error.message
-      );
-      return await mockGetJobsList(page, limit);
-    }
-
     // Với các lỗi khác (400, 401, 500, etc.), vẫn throw để user biết
     throw error;
   }
@@ -217,12 +148,6 @@ export async function getJobsList(options = {}) {
 export async function getJobDetail(jobId, authToken = null) {
   if (!jobId) {
     throw new Error("Job ID is required");
-  }
-
-  // Nếu không có API endpoint, dùng mock data
-  if (shouldUseMockData()) {
-    console.log("📦 Using mock data for job detail");
-    return await mockGetJobDetail(jobId);
   }
 
   const apiEndpoint = process.env.NEXT_PUBLIC_API_GATEWAY_URL;
@@ -269,15 +194,6 @@ export async function getJobDetail(jobId, authToken = null) {
   } catch (error) {
     console.error("Error fetching job detail:", error);
 
-    // Tự động fallback sang mock data nếu là network error
-    if (isNetworkError(error)) {
-      console.warn(
-        "⚠️ Network error detected, falling back to mock data:",
-        error.message
-      );
-      return await mockGetJobDetail(jobId);
-    }
-
     // Với các lỗi khác (404, 401, 500, etc.), vẫn throw để user biết
     throw error;
   }
@@ -288,23 +204,31 @@ export async function getJobDetail(jobId, authToken = null) {
  * @param {string} jobId - Job ID
  * @param {string} cvFileKey - S3 key của CV file
  * @param {string} authToken - JWT token (required)
+ * @param {Object} options - Additional options (coverLetter, allowSearch)
  * @returns {Promise<Object>}
  */
-export async function submitApplication(jobId, cvFileKey, authToken) {
+export async function submitApplication(
+  jobId,
+  cvFileKey,
+  authToken,
+  options = {}
+) {
   if (!authToken) {
     throw new Error("Authentication token is required");
   }
 
-  // Nếu không có API endpoint, dùng mock data
-  if (shouldUseMockData()) {
-    console.log("📦 Using mock data for submit application");
-    return await mockSubmitApplication(jobId, cvFileKey);
+  if (!jobId) {
+    throw new Error("Job ID is required");
+  }
+
+  if (!cvFileKey) {
+    throw new Error("CV file key is required");
   }
 
   const apiEndpoint = process.env.NEXT_PUBLIC_API_GATEWAY_URL;
 
   try {
-    // API endpoint: https://core-jobs.theblogreviews.com/jobs/:id/apply
+    // API endpoint: https://core-jobs.theblogreviews.com/jobs/{jobId}/apply
     const baseUrl = normalizeEndpoint(apiEndpoint);
     const applyEndpoint = `${baseUrl}/jobs/${jobId}/apply`;
 
@@ -316,6 +240,8 @@ export async function submitApplication(jobId, cvFileKey, authToken) {
       },
       body: JSON.stringify({
         cvFileKey,
+        coverLetter: options.coverLetter || "",
+        allowSearch: options.allowSearch || false,
       }),
     });
 
@@ -332,15 +258,6 @@ export async function submitApplication(jobId, cvFileKey, authToken) {
     return data.data || data;
   } catch (error) {
     console.error("Error submitting application:", error);
-
-    // Tự động fallback sang mock data nếu là network error
-    if (isNetworkError(error)) {
-      console.warn(
-        "⚠️ Network error detected, falling back to mock data:",
-        error.message
-      );
-      return await mockSubmitApplication(jobId, cvFileKey);
-    }
 
     // Với các lỗi khác (400, 401, 500, etc.), vẫn throw để user biết
     throw error;
@@ -366,20 +283,6 @@ function generateJobId() {
 export async function createJob(jobData, authToken) {
   if (!authToken) {
     throw new Error("Authentication token is required");
-  }
-
-  // Nếu không có API endpoint, dùng mock data
-  if (shouldUseMockData()) {
-    console.log("📦 Using mock data for create job");
-    // Simulate success
-    return {
-      success: true,
-      job: {
-        ...jobData,
-        id: `mock_${Date.now()}`,
-        createdAt: new Date().toISOString(),
-      },
-    };
   }
 
   const apiEndpoint = process.env.NEXT_PUBLIC_API_GATEWAY_URL;
@@ -429,22 +332,6 @@ export async function createJob(jobData, authToken) {
   } catch (error) {
     console.error("Error creating job:", error);
 
-    // Tự động fallback sang mock data nếu là network error
-    if (isNetworkError(error)) {
-      console.warn(
-        "⚠️ Network error detected, falling back to mock data:",
-        error.message
-      );
-      return {
-        success: true,
-        job: {
-          ...jobData,
-          id: `mock_${Date.now()}`,
-          createdAt: new Date().toISOString(),
-        },
-      };
-    }
-
     throw error;
   }
 }
@@ -463,18 +350,6 @@ export async function updateJob(jobId, jobData, authToken) {
 
   if (!jobId) {
     throw new Error("Job ID is required");
-  }
-
-  // Nếu không có API endpoint, dùng mock data
-  if (shouldUseMockData()) {
-    console.log("📦 Using mock data for update job");
-    return {
-      success: true,
-      job: {
-        ...jobData,
-        id: jobId,
-      },
-    };
   }
 
   const apiEndpoint = process.env.NEXT_PUBLIC_API_GATEWAY_URL;
@@ -515,21 +390,6 @@ export async function updateJob(jobId, jobData, authToken) {
   } catch (error) {
     console.error("Error updating job:", error);
 
-    // Tự động fallback sang mock data nếu là network error
-    if (isNetworkError(error)) {
-      console.warn(
-        "⚠️ Network error detected, falling back to mock data:",
-        error.message
-      );
-      return {
-        success: true,
-        job: {
-          ...jobData,
-          id: jobId,
-        },
-      };
-    }
-
     throw error;
   }
 }
@@ -547,16 +407,6 @@ export async function deleteJob(jobId, authToken) {
 
   if (!jobId) {
     throw new Error("Job ID is required");
-  }
-
-  // Nếu không có API endpoint, dùng mock data
-  if (shouldUseMockData()) {
-    console.log("📦 Using mock data for delete job");
-    return {
-      success: true,
-      message: `Deleted job with ID: ${jobId}`,
-      deletedId: jobId,
-    };
   }
 
   const apiEndpoint = process.env.NEXT_PUBLIC_API_GATEWAY_URL;
@@ -591,19 +441,6 @@ export async function deleteJob(jobId, authToken) {
     return data;
   } catch (error) {
     console.error("Error deleting job:", error);
-
-    // Tự động fallback sang mock data nếu là network error
-    if (isNetworkError(error)) {
-      console.warn(
-        "⚠️ Network error detected, falling back to mock data:",
-        error.message
-      );
-      return {
-        success: true,
-        message: `Deleted job with ID: ${jobId}`,
-        deletedId: jobId,
-      };
-    }
 
     throw error;
   }

@@ -5,7 +5,7 @@
  * 1. Pre-signed URL (cũ): Frontend gọi API Gateway → lấy pre-signed URL → upload
  * 2. Amplify Storage API (mới): Dùng Amplify Storage trực tiếp
  */
-import { uploadData } from "aws-amplify/storage";
+import { uploadData, getUrl } from "aws-amplify/storage";
 
 /**
  * Lấy pre-signed URL từ API Gateway
@@ -182,15 +182,52 @@ export async function uploadFileToS3Amplify(file, fileKey, onProgress = null) {
 
     console.log("✅ Upload successful:", result);
 
+    // Get S3 URL for viewing
+    let fileUrl = null;
+    try {
+      const urlResult = await getUrl({
+        key: finalFileKey,
+        options: {
+          expiresIn: 3600, // URL valid for 1 hour
+        },
+      });
+      fileUrl = urlResult.url.toString();
+    } catch (urlError) {
+      console.warn("Could not get file URL:", urlError);
+      // Continue without URL
+    }
+
     return {
       success: true,
       fileKey: finalFileKey,
       path: result.path || finalFileKey,
+      fileUrl, // S3 URL để xem file
     };
   } catch (error) {
     console.error("❌ Error uploading file to S3 via Amplify:", error);
     throw new Error(
       error.message || "Có lỗi xảy ra khi upload file. Vui lòng thử lại."
     );
+  }
+}
+
+/**
+ * Lấy S3 URL từ fileKey để xem file
+ * @param {string} fileKey - S3 key của file
+ * @param {number} expiresIn - Thời gian URL hợp lệ (seconds), default 3600 (1 hour)
+ * @returns {Promise<string>} S3 URL
+ */
+export async function getS3FileUrl(fileKey, expiresIn = 3600) {
+  try {
+    const urlResult = await getUrl({
+      key: fileKey,
+      options: {
+        expiresIn,
+      },
+    });
+    return urlResult.url.toString();
+  } catch (error) {
+    console.error("Error getting S3 file URL:", error);
+    throw new Error("Không thể lấy link xem file. Vui lòng thử lại.");
   }
 }

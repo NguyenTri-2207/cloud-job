@@ -41,6 +41,73 @@ export const handler = async (event) => {
       };
     }
 
+    // Check if this is an apply request: POST /jobs/{jobId}/apply
+    const path = event.path || event.requestContext?.http?.path || "";
+    const isApplyRequest = path.includes("/apply") && method === "POST";
+
+    if (isApplyRequest) {
+      // Handle job application submission
+      if (!event.body) throw new Error("Body is empty");
+
+      let requestJSON =
+        typeof event.body === "string" ? JSON.parse(event.body) : event.body;
+
+      // Get jobId from path parameter
+      const applyJobId =
+        event.pathParameters?.jobId ||
+        event.pathParameters?.id ||
+        path.split("/").slice(-2, -1)[0]; // Extract from path like /jobs/{jobId}/apply
+
+      if (!applyJobId) {
+        throw new Error("Job ID is required");
+      }
+
+      if (!requestJSON.cvFileKey) {
+        throw new Error("CV file key is required");
+      }
+
+      // Generate application ID
+      const applicationId = `app_${Date.now()}_${Math.random()
+        .toString(36)
+        .substring(2, 9)}`;
+
+      // Prepare application data
+      const applicationData = {
+        [PARTITION_KEY]: applicationId,
+        id: applicationId,
+        jobId: applyJobId,
+        cvFileKey: requestJSON.cvFileKey,
+        coverLetter: requestJSON.coverLetter || "",
+        allowSearch: requestJSON.allowSearch || false,
+        submittedAt: new Date().toISOString(),
+        status: "pending",
+      };
+
+      // Save application to DynamoDB
+      await docClient.send(
+        new PutCommand({
+          TableName: TABLE_NAME,
+          Item: applicationData,
+        })
+      );
+
+      console.log("Application submitted successfully:", applicationId);
+
+      body = {
+        success: true,
+        applicationId,
+        jobId: applyJobId,
+        cvFileKey: requestJSON.cvFileKey,
+        submittedAt: applicationData.submittedAt,
+      };
+
+      return {
+        statusCode: 200,
+        body: JSON.stringify(body),
+        headers,
+      };
+    }
+
     switch (method) {
       case "GET":
         // Lấy ID từ query parameter id hoặc path parameter
