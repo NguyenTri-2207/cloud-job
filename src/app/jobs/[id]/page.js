@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuthenticator } from "@aws-amplify/ui-react";
-import { fetchAuthSession } from "aws-amplify/auth";
 import { getJobDetail } from "../../../services/jobService";
 
 /**
@@ -36,18 +35,7 @@ export default function JobDetailPage() {
     setError("");
 
     try {
-      // Lấy auth token nếu user đã login
-      let authToken = null;
-      if (user) {
-        try {
-          const session = await fetchAuthSession();
-          authToken = session.tokens?.idToken?.toString();
-        } catch (authError) {
-          console.warn("Could not get auth token:", authError);
-        }
-      }
-
-      const jobData = await getJobDetail(jobId, authToken);
+      const jobData = await getJobDetail(jobId);
       setJob(jobData);
     } catch (err) {
       setError(err.message || "Có lỗi xảy ra khi tải thông tin việc làm");
