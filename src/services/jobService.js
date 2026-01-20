@@ -227,11 +227,11 @@ export async function submitApplication(
 
   try {
     const response = await apiClient.post(
-      `/jobs/${jobId}/apply`,
+      "/applys",
       {
+        jobId,
         cvFileKey,
         coverLetter: options.coverLetter || "",
-        allowSearch: options.allowSearch || false,
       },
       {
         headers: {

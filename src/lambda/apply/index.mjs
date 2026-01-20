@@ -1,5 +1,3 @@
-// Lambda handler riêng cho Apply API
-// Endpoint: POST /jobs/{jobId}/apply
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
   DynamoDBDocumentClient,
@@ -8,109 +6,97 @@ import {
 
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
+
 const TABLE_NAME = "DynamoDBCLoudJobs";
-const PARTITION_KEY = "Ngoctri22071@";
 
 export const handler = async (event) => {
-  console.log("Apply event received:", JSON.stringify(event));
-
-  let body;
-  let statusCode = 200;
+  console.log("Apply API event:", JSON.stringify(event));
 
   const headers = {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers":
-      "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Accept",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Max-Age": "86400", // Cache preflight for 24 hours
+    "Access-Control-Allow-Headers": "Content-Type,Authorization",
+    "Access-Control-Allow-Methods": "POST,OPTIONS",
   };
 
   try {
     const method = event.httpMethod || event.requestContext?.http?.method;
 
-    // Handle CORS preflight (OPTIONS request)
+    // Handle CORS
     if (method === "OPTIONS") {
+      return { statusCode: 200, headers, body: "" };
+    }
+
+    if (method !== "POST") {
       return {
-        statusCode: 200,
-        body: "",
+        statusCode: 405,
         headers,
+        body: JSON.stringify({ message: "Only POST is allowed" }),
       };
     }
 
-    // Chỉ xử lý POST request
-    if (method !== "POST") {
-      throw new Error(`Method ${method} not allowed. Only POST is supported.`);
-    }
-
-    // Validate body
     if (!event.body) {
-      throw new Error("Body is required");
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ message: "Request body is required" }),
+      };
     }
 
-    let requestJSON =
+    const body =
       typeof event.body === "string" ? JSON.parse(event.body) : event.body;
 
-    // Get jobId from path parameter
-    const path = event.path || event.requestContext?.http?.path || "";
-    const applyJobId =
-      event.pathParameters?.jobId ||
-      event.pathParameters?.id ||
-      path.split("/").slice(-2, -1)[0]; // Extract from path like /jobs/{jobId}/apply
+    const { jobId, cvFileKey, coverLetter = "" } = body;
 
-    if (!applyJobId) {
-      throw new Error("Job ID is required in path parameter");
+    if (!jobId || !cvFileKey) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({
+          message: "jobId and cvFileKey are required",
+        }),
+      };
     }
 
-    // Chỉ nhận 2 trường từ FE: cvFileKey, coverLetter (optional)
-    if (!requestJSON.cvFileKey) {
-      throw new Error("CV file key is required");
-    }
-
-    // Generate application ID
     const applicationId = `app_${Date.now()}_${Math.random()
       .toString(36)
-      .substring(2, 9)}`;
+      .substring(2, 8)}`;
 
-    // Prepare application data
-    const applicationData = {
-      [PARTITION_KEY]: applicationId,
-      id: applicationId,
-      jobId: applyJobId,
-      cvFileKey: requestJSON.cvFileKey,
-      coverLetter: requestJSON.coverLetter || "",
-      submittedAt: new Date().toISOString(),
+    const item = {
+      ["Ngoctri22071@"]: applicationId, 
+      applicationId,
+      jobId,
+      cvFileKey,
+      coverLetter,
       status: "pending",
+      submittedAt: new Date().toISOString(),
     };
 
-    // Save application to DynamoDB
     await docClient.send(
       new PutCommand({
         TableName: TABLE_NAME,
-        Item: applicationData,
+        Item: item,
       })
     );
 
-    console.log("Application submitted successfully:", applicationId);
-
-    body = {
-      success: true,
-      applicationId,
-      jobId: applyJobId,
-      cvFileKey: requestJSON.cvFileKey,
-      submittedAt: applicationData.submittedAt,
+    return {
+      statusCode: 201,
+      headers,
+      body: JSON.stringify({
+        success: true,
+        applicationId,
+        jobId,
+      }),
     };
+  } catch (error) {
+    console.error("Apply job error:", error);
 
-    statusCode = 200;
-  } catch (err) {
-    console.error("Error in apply handler:", err);
-    statusCode = 400;
-    body = { error: err.message };
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({
+        message: "Internal Server Error", 
+      }),
+    };
   }
-
-  return {
-    statusCode,
-    body: JSON.stringify(body),
-    headers,
-  };
 };
