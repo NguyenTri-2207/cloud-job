@@ -9,6 +9,8 @@ import axios from "axios";
 // AXIOS INSTANCE CONFIGURATION
 // ============================================
 
+const APPLY_PATH = process.env.NEXT_PUBLIC_APPLY_PATH || "/applys";
+
 const getBaseURL = () => {
   const endpoint = process.env.NEXT_PUBLIC_API_GATEWAY_URL;
   if (!endpoint) return "";
@@ -226,8 +228,17 @@ export async function submitApplication(
   }
 
   try {
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[submitApplication]", {
+        baseURL: apiClient.defaults.baseURL,
+        path: APPLY_PATH,
+        jobId,
+        cvFileKey,
+      });
+    }
+
     const response = await apiClient.post(
-      "/applys",
+      APPLY_PATH,
       {
         jobId,
         cvFileKey,
