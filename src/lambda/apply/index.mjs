@@ -62,6 +62,7 @@ export const handler = async (event) => {
       throw new Error("Job ID is required in path parameter");
     }
 
+    // Chỉ nhận 2 trường từ FE: cvFileKey, coverLetter (optional)
     if (!requestJSON.cvFileKey) {
       throw new Error("CV file key is required");
     }
@@ -78,7 +79,6 @@ export const handler = async (event) => {
       jobId: applyJobId,
       cvFileKey: requestJSON.cvFileKey,
       coverLetter: requestJSON.coverLetter || "",
-      allowSearch: requestJSON.allowSearch || false,
       submittedAt: new Date().toISOString(),
       status: "pending",
     };
