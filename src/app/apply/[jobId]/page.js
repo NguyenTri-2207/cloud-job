@@ -64,7 +64,7 @@ export default function ApplyJobPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-50 font-sans dark:bg-black">
+    <div className="flex min-h-screen flex-col">
      
 
       {/* Main Content */}
