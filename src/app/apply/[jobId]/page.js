@@ -65,32 +65,13 @@ export default function ApplyJobPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 font-sans dark:bg-black">
-      {/* Header */}
-      <nav className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-          <div>
-            <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-              {job?.title || "Ứng tuyển"}
-            </h1>
-            {job?.company && (
-              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                {job.company} - {job.location}
-              </p>
-            )}
-          </div>
-          <button
-            onClick={() => router.back()}
-            className="text-2xl font-light text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-          >
-            ×
-          </button>
-        </div>
-      </nav>
+     
 
       {/* Main Content */}
       <main className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
         <ApplyForm
           jobId={jobId}
+          jobTitle={job?.title}
           user={user}
           onSuccess={() =>
             setTimeout(() => {

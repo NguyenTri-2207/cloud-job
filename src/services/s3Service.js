@@ -1,233 +1,113 @@
-/**
- * Service để xử lý upload file lên S3
- *
- * Có 2 cách:
- * 1. Pre-signed URL (cũ): Frontend gọi API Gateway → lấy pre-signed URL → upload
- * 2. Amplify Storage API (mới): Dùng Amplify Storage trực tiếp
- */
 import { uploadData, getUrl } from "aws-amplify/storage";
 
-/**
- * Lấy pre-signed URL từ API Gateway
- * @param {string} fileName - Tên file (sẽ được sanitize ở backend)
- * @param {string} fileType - MIME type của file (e.g., 'application/pdf')
- * @param {string} authToken - JWT token từ Cognito
- * @returns {Promise<{uploadUrl: string, fileKey: string}>}
- */
-export async function getPresignedUrl(fileName, fileType, authToken) {
-  const apiEndpoint = process.env.NEXT_PUBLIC_API_GATEWAY_URL;
-
-  if (!apiEndpoint) {
-    throw new Error(
-      "API Gateway URL chưa được cấu hình. Vui lòng thêm NEXT_PUBLIC_API_GATEWAY_URL vào .env"
-    );
-  }
-
-  try {
-    const response = await fetch(`${apiEndpoint}/upload/presigned-url`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${authToken}`,
-      },
-      body: JSON.stringify({
-        fileName,
-        fileType,
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response
-        .json()
-        .catch(() => ({ message: "Unknown error" }));
-      throw new Error(
-        error.message || `HTTP ${response.status}: ${response.statusText}`
-      );
-    }
-
-    const data = await response.json();
-    return {
-      uploadUrl: data.uploadUrl,
-      fileKey: data.fileKey, // S3 key để lưu vào database
-    };
-  } catch (error) {
-    console.error("Error getting pre-signed URL:", error);
-    throw error;
-  }
-}
+// Cấu hình Constants
+const CLOUDFRONT_DOMAIN = process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN; // Ví dụ: https://d123.cloudfront.net
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const ALLOWED_TYPES = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
+];
 
 /**
- * Upload file lên S3 bằng pre-signed URL
- * @param {File} file - File object từ input
- * @param {string} uploadUrl - Pre-signed URL từ API
- * @returns {Promise<{success: boolean, fileKey?: string}>}
+ * Helper: Tạo CloudFront URL từ File Key
  */
-export async function uploadFileToS3(file, uploadUrl) {
-  try {
-    const response = await fetch(uploadUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Type": file.type,
-      },
-      body: file,
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `Upload failed: ${response.status} ${response.statusText}`
-      );
-    }
-
-    // Extract file key từ URL (hoặc trả về từ API)
-    // Pre-signed URL thường có format: https://bucket.s3.region.amazonaws.com/path/to/file?signature
-    const urlObj = new URL(uploadUrl);
-    const fileKey = urlObj.pathname.substring(1); // Remove leading slash
-
-    return {
-      success: true,
-      fileKey,
-    };
-  } catch (error) {
-    console.error("Error uploading file to S3:", error);
-    throw error;
-  }
-}
+const buildCloudFrontUrl = (fileKey) => {
+  if (!CLOUDFRONT_DOMAIN) return null;
+  
+  // Xử lý dấu '/' để tránh bị double slash (//)
+  const baseUrl = CLOUDFRONT_DOMAIN.replace(/\/$/, "");
+  const cleanKey = fileKey.replace(/^\//, "");
+  
+  return `${baseUrl}/${cleanKey}`;
+};
 
 /**
- * Validate file trước khi upload
- * @param {File} file - File object
- * @param {Object} options - Validation options
- * @returns {{valid: boolean, error?: string}}
+ * 1. Validate File
  */
-export function validateFile(file, options = {}) {
-  const {
-    maxSize = 5 * 1024 * 1024, // 5MB default
-    allowedTypes = [
-      "application/pdf",
-      "application/msword",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ],
-  } = options;
+export function validateFile(file) {
+  if (!file) return { valid: false, error: "Vui lòng chọn file." };
 
-  if (!file) {
-    return { valid: false, error: "Vui lòng chọn file" };
+  if (file.size > MAX_FILE_SIZE) {
+    return { valid: false, error: `File quá lớn (Max: ${MAX_FILE_SIZE / 1024 / 1024}MB).` };
   }
 
-  if (file.size > maxSize) {
-    const maxSizeMB = (maxSize / (1024 * 1024)).toFixed(1);
-    return {
-      valid: false,
-      error: `File quá lớn. Kích thước tối đa: ${maxSizeMB}MB`,
-    };
-  }
-
-  if (!allowedTypes.includes(file.type)) {
-    return {
-      valid: false,
-      error: "Chỉ chấp nhận file PDF hoặc Word (.pdf, .doc, .docx)",
-    };
+  if (!ALLOWED_TYPES.includes(file.type)) {
+    return { valid: false, error: "Chỉ chấp nhận file PDF hoặc Word (.doc, .docx)." };
   }
 
   return { valid: true };
 }
 
 /**
- * Upload file lên S3 sử dụng Amplify Storage API (v6)
- *
- * @param {File} file - File object từ input
- * @param {string} fileKey - S3 key (path) để lưu file (e.g., "cvs/user123/job456/cv.pdf")
- * @param {Function} onProgress - Callback để track progress: (progress) => void
- * @returns {Promise<{success: boolean, fileKey: string, path: string}>}
+ * 2. Upload File lên S3 (Dùng Amplify Gen 2)
+ * @param {File} file - File từ input
+ * @param {Function} onProgress - Callback update thanh tiến trình
  */
-export async function uploadFileToS3Amplify(file, fileKey, onProgress = null) {
+export async function uploadCVToS3(file, onProgress) {
   try {
-    // Validate file trước
+    // Bước 1: Validate lại lần nữa cho chắc
     const validation = validateFile(file);
-    if (!validation.valid) {
-      throw new Error(validation.error);
-    }
+    if (!validation.valid) throw new Error(validation.error);
 
-    // Generate file key nếu chưa có
-    // Format: cvs/{timestamp}_{random}_{filename}
-    const finalFileKey =
-      fileKey ||
-      `cvs/${Date.now()}_${Math.random().toString(36).substring(2, 9)}_${
-        file.name
-      }`;
+    // Bước 2: Tạo đường dẫn file (Key) chuẩn
+    // Cấu trúc: public/cvs/{timestamp}_{random}_{filename}
+    // Lưu ý: Phải bắt đầu bằng 'public/' để khớp với IAM Policy bạn đã setup
+    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_"); // Bỏ ký tự đặc biệt
+    const fileKey = `public/cvs/${Date.now()}_${sanitizedFileName}`;
 
-    console.log("📤 Uploading file to S3 via Amplify Storage:", finalFileKey);
+    console.log("🚀 Start Uploading:", fileKey);
 
-    // Upload using Amplify Storage API
+    // Bước 3: Gọi Amplify SDK để upload
     const result = await uploadData({
-      key: finalFileKey,
+      key: fileKey,
       data: file,
       options: {
-        contentType: file.type,
-        onProgress: (progress) => {
-          if (onProgress) {
-            const percent = progress.transferredBytes
-              ? Math.round(
-                  (progress.transferredBytes / progress.totalBytes) * 100
-                )
-              : 0;
-            onProgress({
-              transferredBytes: progress.transferredBytes,
-              totalBytes: progress.totalBytes,
-              percent,
-            });
+        contentType: file.type, // Quan trọng để trình duyệt mở được file (thay vì download)
+        onProgress: ({ transferredBytes, totalBytes }) => {
+          if (onProgress && totalBytes) {
+            const percent = Math.round((transferredBytes / totalBytes) * 100);
+            onProgress(percent);
           }
         },
       },
     }).result;
 
-    console.log("✅ Upload successful:", result);
+    console.log("✅ Upload S3 Success:", result.key);
 
-    // Get S3 URL for viewing
-    let fileUrl = null;
-    try {
-      const urlResult = await getUrl({
-        key: finalFileKey,
-        options: {
-          expiresIn: 3600, // URL valid for 1 hour
-        },
-      });
-      fileUrl = urlResult.url.toString();
-    } catch (urlError) {
-      console.warn("Could not get file URL:", urlError);
-      // Continue without URL
-    }
+    // Bước 4: Tạo URL để xem lại (Ưu tiên CloudFront)
+    const viewUrl = buildCloudFrontUrl(result.key);
 
     return {
       success: true,
-      fileKey: finalFileKey,
-      path: result.path || finalFileKey,
-      fileUrl, // S3 URL để xem file
+      fileKey: result.key, // Lưu cái này vào DB (để sau này xóa hoặc xử lý)
+      fileUrl: viewUrl,    // Lưu cái này vào DB (để Admin click xem luôn)
     };
+
   } catch (error) {
-    console.error("❌ Error uploading file to S3 via Amplify:", error);
-    throw new Error(
-      error.message || "Có lỗi xảy ra khi upload file. Vui lòng thử lại."
-    );
+    console.error("❌ Upload Error:", error);
+    throw new Error(error.message || "Lỗi khi upload file lên hệ thống.");
   }
 }
 
 /**
- * Lấy S3 URL từ fileKey để xem file
- * @param {string} fileKey - S3 key của file
- * @param {number} expiresIn - Thời gian URL hợp lệ (seconds), default 3600 (1 hour)
- * @returns {Promise<string>} S3 URL
+ * 3. Lấy URL xem file (Dùng khi hiển thị danh sách)
+ * Hàm này dùng nếu bạn chỉ lưu Key trong DB và muốn generate URL động
  */
-export async function getS3FileUrl(fileKey, expiresIn = 3600) {
+export async function getFileViewUrl(fileKey) {
+  // Ưu tiên 1: CloudFront (Nhanh, rẻ, Public Read)
+  const cfUrl = buildCloudFrontUrl(fileKey);
+  if (cfUrl) return cfUrl;
+
+  // Ưu tiên 2: S3 Signed URL (Fallback nếu chưa config CloudFront)
   try {
-    const urlResult = await getUrl({
+    const link = await getUrl({
       key: fileKey,
-      options: {
-        expiresIn,
-      },
+      options: { expiresIn: 3600 }, // Link sống 1 tiếng
     });
-    return urlResult.url.toString();
-  } catch (error) {
-    console.error("Error getting S3 file URL:", error);
-    throw new Error("Không thể lấy link xem file. Vui lòng thử lại.");
+    return link.url.toString();
+  } catch (err) {
+    console.error("Get URL Error:", err);
+    return null;
   }
 }

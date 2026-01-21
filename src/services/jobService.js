@@ -204,16 +204,15 @@ export async function getJobDetail(jobId) {
 /**
  * Submit application cho job (Requires auth)
  * @param {string} jobId - Job ID
- * @param {string} cvFileKey - S3 key của CV file
+ * @param {string} cvFileUrl - CloudFront URL của CV file
  * @param {string} authToken - JWT token (required)
  * @param {Object} options - Additional options
  * @param {string} options.coverLetter - Cover letter text
- * @param {boolean} options.allowSearch - Allow search flag
  * @returns {Promise<Object>}
  */
 export async function submitApplication(
   jobId,
-  cvFileKey,
+  cvFileUrl,
   authToken,
   options = {}
 ) {
@@ -223,8 +222,8 @@ export async function submitApplication(
   if (!jobId) {
     throw new Error("Job ID is required");
   }
-  if (!cvFileKey) {
-    throw new Error("CV file key is required");
+  if (!cvFileUrl) {
+    throw new Error("CV file URL is required");
   }
 
   try {
@@ -233,7 +232,7 @@ export async function submitApplication(
         baseURL: apiClient.defaults.baseURL,
         path: APPLY_PATH,
         jobId,
-        cvFileKey,
+        cvFileUrl,
       });
     }
 
@@ -241,7 +240,7 @@ export async function submitApplication(
       APPLY_PATH,
       {
         jobId,
-        cvFileKey,
+        cvFileUrl, // Gửi CloudFront URL thay vì fileKey
         coverLetter: options.coverLetter || "",
       },
       {

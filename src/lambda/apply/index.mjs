@@ -46,14 +46,14 @@ export const handler = async (event) => {
     const body =
       typeof event.body === "string" ? JSON.parse(event.body) : event.body;
 
-    const { jobId, cvFileKey, coverLetter = "" } = body;
+    const { jobId, cvFileUrl, coverLetter = "" } = body;
 
-    if (!jobId || !cvFileKey) {
+    if (!jobId || !cvFileUrl) {
       return {
         statusCode: 400,
         headers,
         body: JSON.stringify({
-          message: "jobId and cvFileKey are required",
+          message: "jobId and cvFileUrl are required",
         }),
       };
     }
@@ -66,7 +66,7 @@ export const handler = async (event) => {
       ["Ngoctri22071@"]: applicationId, 
       applicationId,
       jobId,
-      cvFileKey,
+      cvFileUrl, // Lưu CloudFront URL thay vì fileKey
       coverLetter,
       status: "pending",
       submittedAt: new Date().toISOString(),

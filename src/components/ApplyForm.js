@@ -3,14 +3,13 @@
 import { useState } from "react";
 import { fetchAuthSession } from "aws-amplify/auth";
 import { submitApplication } from "@/services/jobService";
-import { uploadFileToS3Amplify, validateFile } from "@/services/s3Service";
+import { uploadCVToS3 } from "@/services/s3Service"; // 👈 Sửa tên hàm import cho đúng
 import { useAsyncStatus } from "@/hooks/useAsyncStatus";
 
 /**
  * Form ứng tuyển: upload CV + nhập cover letter
- * Tách riêng để page job detail/ apply page gọn hơn.
  */
-export default function ApplyForm({ jobId, user, onSuccess }) {
+export default function ApplyForm({ jobId, jobTitle, user, onSuccess }) {
   const {
     error,
     setError,
@@ -21,13 +20,14 @@ export default function ApplyForm({ jobId, user, onSuccess }) {
 
   const [coverLetter, setCoverLetter] = useState("");
   const [uploadedFileKey, setUploadedFileKey] = useState(null);
-  const [uploadedFileUrl, setUploadedFileUrl] = useState(null);
+  const [uploadedFileUrl, setUploadedFileUrl] = useState(null); // Link CloudFront
   const [uploadedFileName, setUploadedFileName] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
+  
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [toast, setToast] = useState(null); // { message, type: 'success' | 'error' }
+  const [toast, setToast] = useState(null);
 
   const showToast = (message, type = "success") => {
     setToast({ message, type });
@@ -38,35 +38,32 @@ export default function ApplyForm({ jobId, user, onSuccess }) {
     const selectedFile = e.target.files[0];
     if (!selectedFile) return;
 
+    // Reset trạng thái cũ
     resetStatus();
     setUploadedFileKey(null);
     setUploadedFileUrl(null);
     setUploadedFileName(null);
     setShowPreview(false);
 
-    const validation = validateFile(selectedFile);
-    if (!validation.valid) {
-      setError(validation.error);
-      return;
-    }
-
     setIsUploading(true);
     setUploadProgress(0);
 
     try {
-      const userId = user?.username || user?.userId || "anonymous";
-      const sanitizedFileName = selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const fileKey = `cvs/${userId}/${jobId}/${Date.now()}_${sanitizedFileName}`;
-
-      const uploadResult = await uploadFileToS3Amplify(selectedFile, fileKey, (progress) => {
-        setUploadProgress(progress.percent || 0);
+      // 👇 GỌI HÀM UPLOAD MỚI (Gọn hơn nhiều)
+      // Không cần tự tạo key public/cvs/... ở đây nữa, service lo hết
+      const result = await uploadCVToS3(selectedFile, (percent) => {
+        setUploadProgress(percent);
       });
 
-      setUploadedFileKey(uploadResult.fileKey);
-      setUploadedFileUrl(uploadResult.fileUrl);
+      setUploadedFileKey(result.fileKey);
+      setUploadedFileUrl(result.fileUrl); // Link xem ngay (CloudFront)
       setUploadedFileName(selectedFile.name);
+      
+      showToast("Upload CV thành công!", "success");
+
     } catch (err) {
-      setError(err.message || "Có lỗi xảy ra khi upload file");
+      console.error("Upload failed:", err);
+      setError(err.message || "Lỗi khi upload file. Vui lòng thử lại.");
     } finally {
       setIsUploading(false);
     }
@@ -77,33 +74,39 @@ export default function ApplyForm({ jobId, user, onSuccess }) {
     resetStatus();
 
     if (!uploadedFileKey) {
-      setError("Vui lòng upload CV từ máy tính");
-      showToast("Vui lòng upload CV từ máy tính", "error");
+      setError("Vui lòng upload CV trước khi nộp.");
+      showToast("Chưa có CV!", "error");
       return;
     }
 
     setIsSubmitting(true);
 
     try {
+      // Lấy Token xác thực
       const session = await fetchAuthSession();
       const idToken = session.tokens?.idToken?.toString();
 
       if (!idToken) {
-        throw new Error("Không thể lấy authentication token. Vui lòng đăng nhập lại.");
+        throw new Error("Phiên đăng nhập hết hạn. Vui lòng login lại.");
       }
 
+      // Gửi đơn ứng tuyển
       await submitApplication(jobId, uploadedFileKey, idToken, {
         coverLetter: coverLetter.trim(),
+        // Có thể gửi thêm fileUrl để lưu vào DB cho tiện admin xem
+        cvUrl: uploadedFileUrl 
       });
 
       setSuccess(true);
       showToast("Nộp đơn thành công!", "success");
+      
       if (onSuccess) {
-        onSuccess();
+        setTimeout(onSuccess, 1500); // Delay chút cho user đọc thông báo
       }
     } catch (err) {
-      setError(err.message || "Có lỗi xảy ra khi nộp đơn. Vui lòng thử lại.");
-      showToast(err.message || "Nộp đơn thất bại", "error");
+      console.error("Submit failed:", err);
+      setError(err.message || "Nộp đơn thất bại. Vui lòng thử lại.");
+      showToast("Lỗi nộp đơn!", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -111,161 +114,10 @@ export default function ApplyForm({ jobId, user, onSuccess }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Success Message */}
-      {success && (
-        <div className="rounded-md bg-green-50 p-4 text-sm text-green-800 dark:bg-green-900/20 dark:text-green-400">
-          <p className="font-medium">Nộp đơn thành công!</p>
-          <p className="mt-1">Đang chuyển về trang danh sách việc làm...</p>
-        </div>
-      )}
-
-      {/* Error Message */}
-      {error && (
-        <div className="rounded-md bg-red-50 p-4 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-400">
-          {error}
-        </div>
-      )}
-
-      {/* CV Upload */}
-      <div className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-          Tải lên CV
-        </h2>
-        <div className="rounded-lg border-2 border-dashed border-zinc-300 p-8 text-center dark:border-zinc-700">
-          <svg
-            className="mx-auto h-12 w-12 text-zinc-400"
-            stroke="currentColor"
-            fill="none"
-            viewBox="0 0 48 48"
-          >
-            <path
-              d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          <div className="mt-4">
-            <label className="cursor-pointer">
-              <span className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-100">
-                Chọn CV
-              </span>
-              <input
-                type="file"
-                accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                onChange={handleFileChange}
-                disabled={isUploading}
-                className="hidden"
-              />
-            </label>
-            <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-              Hỗ trợ định dạng .doc, .docx, pdf có kích thước dưới 5MB
-            </p>
-          </div>
-          {isUploading && (
-            <div className="mt-4">
-              <div className="flex items-center justify-between text-sm text-zinc-600 dark:text-zinc-400">
-                <span>Đang upload...</span>
-                <span>{uploadProgress}%</span>
-              </div>
-              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
-                <div
-                  className="h-full bg-zinc-900 transition-all duration-300 dark:bg-zinc-50"
-                  style={{ width: `${uploadProgress}%` }}
-                />
-              </div>
-            </div>
-          )}
-          {uploadedFileKey && !isUploading && (
-            <div className="mt-4 space-y-3 rounded-md bg-green-50 p-4 dark:bg-green-900/20">
-              <div className="flex items-center gap-2">
-                <svg
-                  className="h-5 w-5 text-green-600 dark:text-green-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                <p className="text-sm font-medium text-green-800 dark:text-green-400">
-                  Upload thành công: {uploadedFileName}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                {uploadedFileUrl && (
-                  <>
-                    <a
-                      href={uploadedFileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-blue-600 hover:text-blue-800 underline dark:text-blue-400 dark:hover:text-blue-300"
-                    >
-                      Xem CV trên S3
-                    </a>
-                    {uploadedFileName?.toLowerCase().endsWith(".pdf") && (
-                      <button
-                        type="button"
-                        onClick={() => setShowPreview(!showPreview)}
-                        className="text-sm text-blue-600 hover:text-blue-800 underline dark:text-blue-400 dark:hover:text-blue-300"
-                      >
-                        {showPreview ? "Ẩn preview" : "Xem nhanh"}
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-              {showPreview &&
-                uploadedFileUrl &&
-                uploadedFileName?.toLowerCase().endsWith(".pdf") && (
-                  <div className="mt-3 rounded border border-zinc-200 dark:border-zinc-700">
-                    <iframe
-                      src={uploadedFileUrl}
-                      className="h-96 w-full"
-                      title="CV Preview"
-                    />
-                  </div>
-                )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Cover Letter */}
-      <div className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <label
-          htmlFor="coverLetter"
-          className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2"
-        >
-          Thư giới thiệu:
-        </label>
-        <textarea
-          id="coverLetter"
-          rows={6}
-          value={coverLetter}
-          onChange={(e) => setCoverLetter(e.target.value)}
-          placeholder="Một thư giới thiệu ngắn gọn, chỉn chu sẽ giúp bạn trở nên chuyên nghiệp và gây ấn tượng với nhà tuyển dụng..."
-          className="block w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50 dark:placeholder-zinc-500"
-        />
-      </div>
-
-      {/* Submit Button */}
-      <button
-        type="submit"
-        disabled={isSubmitting || isUploading}
-        className="w-full rounded-md bg-green-600 px-6 py-3 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {isSubmitting ? "Đang xử lý..." : "Nộp hồ sơ ứng tuyển"}
-      </button>
-
-      {/* Toast */}
+      {/* Toast Notification */}
       {toast && (
         <div
-          className={`fixed bottom-4 right-4 z-50 rounded-lg px-4 py-3 shadow-lg text-sm ${
+          className={`fixed top-4 right-4 z-50 animate-fade-in rounded-lg px-6 py-3 shadow-xl text-sm font-medium transition-all ${
             toast.type === "success"
               ? "bg-green-600 text-white"
               : "bg-red-600 text-white"
@@ -274,7 +126,159 @@ export default function ApplyForm({ jobId, user, onSuccess }) {
           {toast.message}
         </div>
       )}
+
+      {/* Success Message */}
+      {success && (
+        <div className="rounded-md bg-green-50 p-4 text-green-800 border border-green-200">
+          <p className="font-bold">🎉 Nộp đơn thành công!</p>
+          <p className="text-sm mt-1">Hệ thống đã gửi email xác nhận cho bạn.</p>
+        </div>
+      )}
+
+      {/* Error Message */}
+      {error && (
+        <div className="rounded-md bg-red-50 p-4 text-red-800 border border-red-200 text-sm">
+          ⚠️ {error}
+        </div>
+      )}
+
+      {/* Upload Area */}
+      <div className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+          CV / Resume
+        </h2>
+        
+        <div className="rounded-lg border-2 border-dashed border-zinc-300 p-8 text-center transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800/50">
+          {!uploadedFileKey ? (
+            // Trạng thái chưa upload
+            <>
+              <svg className="mx-auto h-12 w-12 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              <div className="mt-4">
+                <label className="cursor-pointer">
+                  <span className="rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-zinc-800 transition-all">
+                    Chọn file PDF
+                  </span>
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx"
+                    onChange={handleFileChange}
+                    disabled={isUploading}
+                    className="hidden"
+                  />
+                </label>
+                <p className="mt-3 text-xs text-zinc-500">PDF, Word (Max 5MB)</p>
+              </div>
+            </>
+          ) : (
+            // Trạng thái đã upload xong
+            <div className="flex flex-col items-center">
+              <div className="flex items-center gap-3 bg-green-50 px-4 py-3 rounded-lg border border-green-100 mb-4">
+                <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="text-left">
+                  <p className="text-sm font-medium text-green-900">{uploadedFileName}</p>
+                  <p className="text-xs text-green-600">Đã sẵn sàng nộp</p>
+                </div>
+                {/* Nút X để xóa/chọn lại */}
+                <button 
+                  type="button"
+                  onClick={() => { setUploadedFileKey(null); setUploadedFileUrl(null); }}
+                  className="ml-2 text-zinc-400 hover:text-red-500"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Preview Button */}
+              {uploadedFileUrl && (
+                <div className="flex gap-3">
+                  <a
+                    href={uploadedFileUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm font-medium text-blue-600 hover:underline"
+                  >
+                    Mở tab mới ↗
+                  </a>
+                  {uploadedFileName?.toLowerCase().endsWith(".pdf") && (
+                    <button
+                      type="button"
+                      onClick={() => setShowPreview(!showPreview)}
+                      className="text-sm font-medium text-zinc-600 hover:text-black hover:underline"
+                    >
+                      {showPreview ? "Đóng xem trước" : "Xem trước tại đây"}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Progress Bar */}
+          {isUploading && (
+            <div className="mt-6 w-full max-w-xs mx-auto">
+              <div className="flex justify-between text-xs text-zinc-500 mb-1">
+                <span>Uploading...</span>
+                <span>{uploadProgress}%</span>
+              </div>
+              <div className="h-1.5 w-full bg-zinc-100 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-blue-600 transition-all duration-300 ease-out"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* PDF Preview Frame */}
+        {showPreview && uploadedFileUrl && (
+          <div className="mt-4 border rounded-lg overflow-hidden bg-zinc-100 h-[500px]">
+            <iframe
+              src={uploadedFileUrl}
+              className="w-full h-full"
+              title="CV Preview"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Cover Letter */}
+      <div className="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <label htmlFor="coverLetter" className="block text-sm font-semibold text-zinc-900 mb-2">
+          Thư giới thiệu (Cover Letter)
+        </label>
+        <textarea
+          id="coverLetter"
+          rows={5}
+          value={coverLetter}
+          onChange={(e) => setCoverLetter(e.target.value)}
+          placeholder="Hãy viết vài dòng ngắn gọn giới thiệu về bản thân và lý do bạn phù hợp với vị trí này..."
+          className="w-full rounded-md border-zinc-300 shadow-sm focus:border-black focus:ring-black sm:text-sm p-3 dark:bg-zinc-800 dark:border-zinc-700"
+        />
+      </div>
+
+      {/* Submit Actions */}
+      <button
+        type="submit"
+        disabled={isSubmitting || isUploading || !uploadedFileKey}
+        className="w-full rounded-lg bg-black px-6 py-4 text-base font-bold text-white shadow hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+      >
+        {isSubmitting ? (
+          <span className="flex items-center justify-center gap-2">
+            <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Đang gửi hồ sơ...
+          </span>
+        ) : (
+          "Nộp Hồ Sơ Ngay"
+        )}
+      </button>
     </form>
   );
 }
-

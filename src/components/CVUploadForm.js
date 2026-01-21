@@ -71,8 +71,8 @@ export default function CVUploadForm({
       const userId = user?.username || user?.userId || "anonymous";
       const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
       const fileKey = jobId
-        ? `cvs/${userId}/${jobId}/${Date.now()}_${sanitizedFileName}`
-        : `cvs/${userId}/${Date.now()}_${sanitizedFileName}`;
+        ? `public/cvs/${userId}/${jobId}/${Date.now()}_${sanitizedFileName}`
+        : `public/cvs/${userId}/${Date.now()}_${sanitizedFileName}`;
 
       // Upload file lên S3 sử dụng Amplify Storage API
       const uploadResult = await uploadFileToS3Amplify(
