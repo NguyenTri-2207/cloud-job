@@ -27,8 +27,8 @@ function AdminContent() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   const handleCreateJobSuccess = (result) => {
-    setSuccessMessage("Tạo công việc thành công!");
-    // Clear message sau 3 giây
+    setSuccessMessage("Job created successfully!");
+    // Clear message after 3 seconds
     setTimeout(() => {
       setSuccessMessage("");
     }, 3000);
@@ -37,7 +37,7 @@ function AdminContent() {
   };
 
   const handleCreateJobError = (error) => {
-    // Error đã được handle trong form component
+    // Already handled inside form
     console.error("Error creating job:", error);
   };
 
@@ -46,7 +46,7 @@ function AdminContent() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-50 dark:bg-black">
+    <div className="flex min-h-screen flex-col  ">
     
 
       {/* Admin Content */}
@@ -55,17 +55,17 @@ function AdminContent() {
           {/* Header Section */}
           <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-zinc-900">
             <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-              Trang Admin
+              Admin
             </h1>
             <p className="mt-2 text-zinc-600 dark:text-zinc-400">
-              Quản lý và tạo các công việc mới
+              Manage and create jobs
             </p>
           </div>
 
           {/* Create Job Form */}
           <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-zinc-900">
             <h2 className="mb-6 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-              Tạo công việc mới
+              Create a new job
             </h2>
 
             {/* Success Message */}
@@ -81,10 +81,10 @@ function AdminContent() {
             />
           </div>
 
-          {/* Jobs List với Edit/Delete */}
+          {/* Jobs List with Edit/Delete */}
           <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-zinc-900">
             <h2 className="mb-6 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-              Danh sách công việc
+              Jobs list
             </h2>
             <JobsListAdmin key={refreshKey} onRefresh={handleRefresh} />
           </div>
@@ -92,7 +92,7 @@ function AdminContent() {
           {/* Account Info */}
           <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-zinc-900">
             <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-              Thông tin tài khoản
+              Account info
             </h2>
             <div className="mt-4 space-y-2 text-sm text-zinc-600 dark:text-zinc-400">
               <p>

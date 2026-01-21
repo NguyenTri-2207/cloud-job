@@ -30,7 +30,7 @@ function LoginContent() {
 
   // Trong lúc chờ chuyển trang, hiện thông báo này
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 py-12 dark:bg-black sm:px-6 lg:px-8">
+    <div className="flex min-h-screen items-center justify-center px-4 py-12  sm:px-6 lg:px-8">
       <div className="text-center">
         <p className="text-lg text-zinc-600 dark:text-zinc-400">
           Đăng nhập thành công! Đang chuyển trang...
@@ -42,7 +42,7 @@ function LoginContent() {
 
 export default function LoginPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 py-12 dark:bg-black sm:px-6 lg:px-8">
+    <div className="flex min-h-screen items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
       <div className="w-full max-w-md">
         <Authenticator hideSignUp formFields={formFields}>
           <LoginContent />

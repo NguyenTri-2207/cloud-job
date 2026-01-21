@@ -26,8 +26,17 @@ export default function RootLayout({ children }) {
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <AmplifyProvider>
-          <Header />
-          {children}
+          <div className="relative min-h-screen overflow-hidden bg-linear-to-br from-slate-50 via-white to-blue-50 dark:from-black dark:via-zinc-900 dark:to-slate-900">
+            {/* Animated blobs shared across pages */}
+            <div className="pointer-events-none absolute inset-0 overflow-hidden">
+              <div className="absolute -left-10 -top-20 h-72 w-72 rounded-full bg-blue-200/40 blur-3xl animate-pulse-slow" />
+              <div className="absolute right-0 top-10 h-80 w-80 rounded-full bg-indigo-200/30 blur-3xl animate-pulse-slower" />
+              <div className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-cyan-200/25 blur-3xl animate-pulse-slowest" />
+            </div>
+
+            <Header />
+            <div className="relative z-10 pt-20">{children}</div>
+          </div>
         </AmplifyProvider>
       </body>
     </html>

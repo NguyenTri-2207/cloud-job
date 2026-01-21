@@ -7,12 +7,10 @@ import { useAuthenticator } from "@aws-amplify/ui-react";
 import { getJobDetail } from "../../../services/jobService";
 
 /**
- * Page chi tiết job
- * 
- * Features:
- * - Hiển thị đầy đủ thông tin job
- * - Nút "Ứng tuyển ngay" (chỉ hiện khi đã login)
- * - Loading và error states
+ * Job detail page
+ * - Show full job info
+ * - Apply button (only when logged in)
+ * - Loading and error states
  */
 export default function JobDetailPage() {
   const params = useParams();
@@ -38,7 +36,7 @@ export default function JobDetailPage() {
       const jobData = await getJobDetail(jobId);
       setJob(jobData);
     } catch (err) {
-      setError(err.message || "Có lỗi xảy ra khi tải thông tin việc làm");
+      setError(err.message || "Unable to load job details");
       console.error("Error loading job detail:", err);
     } finally {
       setLoading(false);
@@ -57,7 +55,7 @@ export default function JobDetailPage() {
     if (!dateString) return "N/A";
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString("vi-VN", {
+      return date.toLocaleDateString("en-US", {
         year: "numeric",
         month: "long",
         day: "numeric",
@@ -68,7 +66,7 @@ export default function JobDetailPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-50 font-sans dark:bg-black">
+    <div className="flex min-h-screen flex-col ">
      
 
       {/* Main Content */}
@@ -79,7 +77,7 @@ export default function JobDetailPage() {
             <div className="text-center">
               <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-zinc-900 border-r-transparent dark:border-zinc-50"></div>
               <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
-                Đang tải thông tin việc làm...
+                Loading job details...
               </p>
             </div>
           </div>
@@ -97,13 +95,13 @@ export default function JobDetailPage() {
                   onClick={loadJobDetail}
                   className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-100"
                 >
-                  Thử lại
+                  Retry
                 </button>
                 <Link
                   href="/jobs"
                   className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 >
-                  Quay lại danh sách
+                  Back to jobs
                 </Link>
               </div>
             </div>
@@ -118,10 +116,10 @@ export default function JobDetailPage() {
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-                    {job.title || "Chưa có tiêu đề"}
+                    {job.title || "Untitled"}
                   </h1>
                   <p className="mt-2 text-lg text-zinc-600 dark:text-zinc-400">
-                    {job.company || "Công ty chưa được cập nhật"}
+                    {job.company || "Company not provided"}
                   </p>
                   <div className="mt-4 flex flex-wrap gap-4 text-sm text-zinc-600 dark:text-zinc-400">
                     {job.location && (
@@ -157,18 +155,18 @@ export default function JobDetailPage() {
                     onClick={handleApplyClick}
                     className="w-full rounded-md bg-zinc-900 px-6 py-3 text-base font-medium text-white hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-100"
                   >
-                    Ứng tuyển ngay
+                    Apply now
                   </button>
                 ) : (
                   <div className="text-center">
                     <p className="mb-3 text-sm text-zinc-600 dark:text-zinc-400">
-                      Bạn cần đăng nhập để ứng tuyển
+                      Please sign in to apply
                     </p>
                     <Link
                       href="/login"
                       className="inline-block w-full rounded-md bg-zinc-900 px-6 py-3 text-base font-medium text-white hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-100"
                     >
-                      Đăng nhập để ứng tuyển
+                      Sign in to apply
                     </Link>
                   </div>
                 )}
@@ -179,7 +177,7 @@ export default function JobDetailPage() {
             {job.description && (
               <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
                 <h2 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-                  Mô tả công việc
+                  Job Description
                 </h2>
                 <div
                   className="prose prose-zinc max-w-none dark:prose-invert"
@@ -194,7 +192,7 @@ export default function JobDetailPage() {
             {job.requirements && (
               <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
                 <h2 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-                  Yêu cầu
+                  Requirements
                 </h2>
                 <div
                   className="prose prose-zinc max-w-none dark:prose-invert"
@@ -211,7 +209,7 @@ export default function JobDetailPage() {
                 href="/jobs"
                 className="flex-1 rounded-md border border-zinc-300 bg-white px-6 py-3 text-center text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
               >
-                ← Quay lại danh sách
+                ← Back to jobs
               </Link>
             </div>
           </div>

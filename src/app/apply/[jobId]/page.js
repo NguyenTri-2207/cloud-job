@@ -8,7 +8,7 @@ import ApplyForm from "@/components/ApplyForm";
 import { useAsyncStatus } from "@/hooks/useAsyncStatus";
 
 /**
- * Page để apply job với giao diện mới
+ * Apply page
  */
 export default function ApplyJobPage() {
   const params = useParams();
@@ -20,7 +20,7 @@ export default function ApplyJobPage() {
   const [job, setJob] = useState(null);
   const { loading, setLoading, error, setError } = useAsyncStatus(true);
 
-  // Redirect nếu chưa login
+  // Redirect if not logged in
   useEffect(() => {
     if (!user) {
       router.push("/login");
@@ -40,7 +40,7 @@ export default function ApplyJobPage() {
       const jobData = await getJobDetail(jobId);
       setJob(jobData);
     } catch (err) {
-      setError(err.message || "Không thể tải thông tin công việc");
+      setError(err.message || "Unable to load job info");
     } finally {
       setLoading(false);
     }
@@ -56,7 +56,7 @@ export default function ApplyJobPage() {
         <div className="text-center">
           <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-zinc-900 border-r-transparent dark:border-zinc-50"></div>
           <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
-            Đang tải thông tin...
+            Loading...
           </p>
         </div>
       </div>

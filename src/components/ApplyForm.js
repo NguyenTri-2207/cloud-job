@@ -38,7 +38,7 @@ export default function ApplyForm({ jobId, jobTitle, user, onSuccess }) {
     const selectedFile = e.target.files[0];
     if (!selectedFile) return;
 
-    // Reset trạng thái cũ
+    // Reset previous state
     resetStatus();
     setUploadedFileKey(null);
     setUploadedFileUrl(null);
@@ -49,21 +49,20 @@ export default function ApplyForm({ jobId, jobTitle, user, onSuccess }) {
     setUploadProgress(0);
 
     try {
-      // 👇 GỌI HÀM UPLOAD MỚI (Gọn hơn nhiều)
-      // Không cần tự tạo key public/cvs/... ở đây nữa, service lo hết
+      // Upload helper handles key + CloudFront URL
       const result = await uploadCVToS3(selectedFile, (percent) => {
         setUploadProgress(percent);
       });
 
       setUploadedFileKey(result.fileKey);
-      setUploadedFileUrl(result.fileUrl); // Link xem ngay (CloudFront)
+      setUploadedFileUrl(result.fileUrl); // CloudFront URL
       setUploadedFileName(selectedFile.name);
       
-      showToast("Upload CV thành công!", "success");
+      showToast("CV uploaded successfully!", "success");
 
     } catch (err) {
       console.error("Upload failed:", err);
-      setError(err.message || "Lỗi khi upload file. Vui lòng thử lại.");
+      setError(err.message || "Upload failed. Please try again.");
     } finally {
       setIsUploading(false);
     }
@@ -74,39 +73,39 @@ export default function ApplyForm({ jobId, jobTitle, user, onSuccess }) {
     resetStatus();
 
     if (!uploadedFileKey) {
-      setError("Vui lòng upload CV trước khi nộp.");
-      showToast("Chưa có CV!", "error");
+      setError("Please upload your CV before submitting.");
+      showToast("CV is required.", "error");
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      // Lấy Token xác thực
+      // Get auth token
       const session = await fetchAuthSession();
       const idToken = session.tokens?.idToken?.toString();
 
       if (!idToken) {
-        throw new Error("Phiên đăng nhập hết hạn. Vui lòng login lại.");
+        throw new Error("Session expired. Please sign in again.");
       }
 
-      // Gửi đơn ứng tuyển
+      // Submit application
       await submitApplication(jobId, uploadedFileKey, idToken, {
         coverLetter: coverLetter.trim(),
-        // Có thể gửi thêm fileUrl để lưu vào DB cho tiện admin xem
+        // Optional: send fileUrl for admin reference
         cvUrl: uploadedFileUrl 
       });
 
       setSuccess(true);
-      showToast("Nộp đơn thành công!", "success");
+      showToast("Application submitted!", "success");
       
       if (onSuccess) {
-        setTimeout(onSuccess, 1500); // Delay chút cho user đọc thông báo
+        setTimeout(onSuccess, 1500); // brief delay for user to read
       }
     } catch (err) {
       console.error("Submit failed:", err);
-      setError(err.message || "Nộp đơn thất bại. Vui lòng thử lại.");
-      showToast("Lỗi nộp đơn!", "error");
+      setError(err.message || "Submit failed. Please try again.");
+      showToast("Submit failed.", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -130,8 +129,8 @@ export default function ApplyForm({ jobId, jobTitle, user, onSuccess }) {
       {/* Success Message */}
       {success && (
         <div className="rounded-md bg-green-50 p-4 text-green-800 border border-green-200">
-          <p className="font-bold">🎉 Nộp đơn thành công!</p>
-          <p className="text-sm mt-1">Hệ thống đã gửi email xác nhận cho bạn.</p>
+          <p className="font-bold">🎉 Application submitted!</p>
+          <p className="text-sm mt-1">We sent you a confirmation email.</p>
         </div>
       )}
 
@@ -150,15 +149,15 @@ export default function ApplyForm({ jobId, jobTitle, user, onSuccess }) {
         
         <div className="rounded-lg border-2 border-dashed border-zinc-300 p-8 text-center transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800/50">
           {!uploadedFileKey ? (
-            // Trạng thái chưa upload
+            // Not uploaded yet
             <>
               <svg className="mx-auto h-12 w-12 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
               <div className="mt-4">
                 <label className="cursor-pointer">
-                  <span className="rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-zinc-800 transition-all">
-                    Chọn file PDF
+                 <span className="rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-zinc-800 transition-all">
+                     Choose PDF/Doc
                   </span>
                   <input
                     type="file"
@@ -168,11 +167,11 @@ export default function ApplyForm({ jobId, jobTitle, user, onSuccess }) {
                     className="hidden"
                   />
                 </label>
-                <p className="mt-3 text-xs text-zinc-500">PDF, Word (Max 5MB)</p>
+                 <p className="mt-3 text-xs text-zinc-500">PDF or Word (Max 5MB)</p>
               </div>
             </>
           ) : (
-            // Trạng thái đã upload xong
+             // Uploaded
             <div className="flex flex-col items-center">
               <div className="flex items-center gap-3 bg-green-50 px-4 py-3 rounded-lg border border-green-100 mb-4">
                 <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -201,7 +200,7 @@ export default function ApplyForm({ jobId, jobTitle, user, onSuccess }) {
                     rel="noreferrer"
                     className="text-sm font-medium text-blue-600 hover:underline"
                   >
-                    Mở tab mới ↗
+                   Open in new tab ↗
                   </a>
                   {uploadedFileName?.toLowerCase().endsWith(".pdf") && (
                     <button
@@ -209,7 +208,7 @@ export default function ApplyForm({ jobId, jobTitle, user, onSuccess }) {
                       onClick={() => setShowPreview(!showPreview)}
                       className="text-sm font-medium text-zinc-600 hover:text-black hover:underline"
                     >
-                      {showPreview ? "Đóng xem trước" : "Xem trước tại đây"}
+                       {showPreview ? "Close preview" : "Preview inline"}
                     </button>
                   )}
                 </div>
@@ -219,9 +218,9 @@ export default function ApplyForm({ jobId, jobTitle, user, onSuccess }) {
 
           {/* Progress Bar */}
           {isUploading && (
-            <div className="mt-6 w-full max-w-xs mx-auto">
+             <div className="mt-6 w-full max-w-xs mx-auto">
               <div className="flex justify-between text-xs text-zinc-500 mb-1">
-                <span>Uploading...</span>
+                 <span>Uploading...</span>
                 <span>{uploadProgress}%</span>
               </div>
               <div className="h-1.5 w-full bg-zinc-100 rounded-full overflow-hidden">
