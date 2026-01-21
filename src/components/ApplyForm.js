@@ -27,6 +27,12 @@ export default function ApplyForm({ jobId, user, onSuccess }) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [toast, setToast] = useState(null); // { message, type: 'success' | 'error' }
+
+  const showToast = (message, type = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const handleFileChange = async (e) => {
     const selectedFile = e.target.files[0];
@@ -72,6 +78,7 @@ export default function ApplyForm({ jobId, user, onSuccess }) {
 
     if (!uploadedFileKey) {
       setError("Vui lòng upload CV từ máy tính");
+      showToast("Vui lòng upload CV từ máy tính", "error");
       return;
     }
 
@@ -90,11 +97,13 @@ export default function ApplyForm({ jobId, user, onSuccess }) {
       });
 
       setSuccess(true);
+      showToast("Nộp đơn thành công!", "success");
       if (onSuccess) {
         onSuccess();
       }
     } catch (err) {
       setError(err.message || "Có lỗi xảy ra khi nộp đơn. Vui lòng thử lại.");
+      showToast(err.message || "Nộp đơn thất bại", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -252,6 +261,19 @@ export default function ApplyForm({ jobId, user, onSuccess }) {
       >
         {isSubmitting ? "Đang xử lý..." : "Nộp hồ sơ ứng tuyển"}
       </button>
+
+      {/* Toast */}
+      {toast && (
+        <div
+          className={`fixed bottom-4 right-4 z-50 rounded-lg px-4 py-3 shadow-lg text-sm ${
+            toast.type === "success"
+              ? "bg-green-600 text-white"
+              : "bg-red-600 text-white"
+          }`}
+        >
+          {toast.message}
+        </div>
+      )}
     </form>
   );
 }
